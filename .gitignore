@@ -1,5 +1,7 @@
 /.vscode
 /build
+.DS_Store
+
 Cmake*
 makefile
 !cmakelists.txt
