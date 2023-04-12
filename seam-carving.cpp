@@ -34,14 +34,24 @@ Mat convert_to_edges(Mat& src) {
     return output;
 }
 
-void mat_to_vector(Mat mat, vector<vector<int>>& dest) {
-    vector<vector<int>> vec(mat.rows, vector<int>(mat.cols));
-    for (int i = 0; i < mat.rows; i++) {
-        for (int j = 0; j < mat.cols; j++) {
-            vec[i][j] = (int)mat.at<uchar>(i, j);
+void mat_to_vector(Mat mat, vector<vector<uint8_t>> &dest) {
+    for (int i = 0; i < mat.rows; ++i) {
+        vector<uint8_t> row;
+        for (int j = 0; j < mat.cols; ++j) {
+            row.push_back(mat.at<uint8_t>(i, j));
+        }
+        dest.push_back(row);
+    }
+}
+
+Mat vector_to_mat(vector<vector<uint8_t>> vec) {
+    Mat newmat(vec.size(), vec[0].size(), CV_8U);
+    for (int i = 0; i < newmat.rows; i++) {
+        for (int j = 0; j < newmat.cols; j++) {
+            newmat.at<uint8_t>(i, j) = vec[i][j];
         }
     }
-    dest = vec;
+    return newmat;
 }
 
 void print_2d_vec(const vector<vector<int>>& vec) {
@@ -57,16 +67,23 @@ void print_2d_vec(const vector<vector<int>>& vec) {
 
 int main(int argc, char** argv) {
     string image_path = "images/bikes.jpg";
-    Mat img = imread(image_path);
-    Mat sobel, edges;
+    Mat img = imread(image_path, IMREAD_GRAYSCALE);
+    Mat edges;
 
-    edges = convert_to_edges(img);
+    // edges = convert_to_edges(img);
 
-    vector<vector<int>> edge_vec;
-    mat_to_vector(edges, edge_vec);
+    // vector<vector<int>> edge_vec;
+    // mat_to_vector(edges, edge_vec);
+
+    vector<vector<uint8_t>> testvec;
+    mat_to_vector(img, testvec);
+
+    Mat sobel = vector_to_mat(testvec);
+
+    // Mat image = imread("images/bikes.jpg", IMREAD_GRAYSCALE);
 
     imshow("original", img);
-    imshow("edges", edges);
+    imshow("converted", sobel);
 
     waitKey(0);
 }
