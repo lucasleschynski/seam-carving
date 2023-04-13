@@ -170,7 +170,6 @@ void highlight_seam(Mat &energy, vector<int> seam, SeamDirection seam_direction)
 Mat remove_seam(Mat image, vector<int> seam, SeamDirection seam_direction) {
     int rows = image.rows;
     int cols = image.cols;
-    // Mat edited_image = Mat::zeros(Size(cols, rows), CV_8UC3);
 
     if(seam_direction == VERTICAL) {
         if (seam.size() != rows) {
@@ -186,8 +185,6 @@ Mat remove_seam(Mat image, vector<int> seam, SeamDirection seam_direction) {
 
         Mat edited_image(rows, cols - 1, CV_8UC3);
 
-        // resize(edited_image, edited_image, Size(cols-1, rows));
-        // edited_image.resize(rows, cols-1, CV_8UC3);
         for (int i = 0; i < rows; i++) {
             int edited_col_index = 0;
             for (int j = 0; j < cols; j++) {
@@ -197,7 +194,6 @@ Mat remove_seam(Mat image, vector<int> seam, SeamDirection seam_direction) {
                 }
             }
         }
-        //image = edited_image;
         return edited_image;
     } else if(seam_direction == HORIZONTAL) {
         if (seam.size() != cols) {
@@ -212,7 +208,6 @@ Mat remove_seam(Mat image, vector<int> seam, SeamDirection seam_direction) {
         }
 
         Mat edited_image(rows - 1, cols, CV_8UC3);
-        // resize(edited_image, edited_image, Size(cols, rows-1));
         for (int i = 0; i < cols; i++) {
             int edited_row_index = 0;
             for (int j = 0; j < rows; j++) {
@@ -222,12 +217,8 @@ Mat remove_seam(Mat image, vector<int> seam, SeamDirection seam_direction) {
                 }
             }
         }
-        // image = edited_image;
         return edited_image;
     }
-
-    // image = edited_image;
-    // return image;
 }
 
 Mat resize_image(Mat image, int shrink, SeamDirection seam_direction) {
@@ -276,9 +267,9 @@ int main() {
 
     // string image_path = "images/castle.jpg";
     Mat img = imread(image_path);
-    resize(img, img, Size(), 0.5, 0.5);
+    // resize(img, img, Size(), 0.5, 0.5);
     imshow("original", img);
-    //img = resize_image(img, 200, VERTICAL);
+    // img = resize_image(img, 300, HORIZONTAL);
     img = resize_image(img, shrink_size, shrink_direction);
 
     imshow("resized", img);
