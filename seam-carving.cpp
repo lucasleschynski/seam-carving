@@ -10,15 +10,15 @@
 using namespace std;
 using namespace cv;
 
-void gray_mat_to_vector(Mat mat, vector<vector<int>> &dest) {
+void gray_mat_to_vector(Mat mat, vector<vector<uint8_t>> &dest) {
     if(mat.channels() != 1) {
         throw runtime_error("Error: image provided is not grayscale");
     }
 
     for (int i = 0; i < mat.rows; ++i) {
-        vector<int> row;
+        vector<uint8_t> row;
         for (int j = 0; j < mat.cols; ++j) {
-            row.push_back(mat.at<int>(i, j));
+            row.push_back(mat.at<uint8_t>(i, j));
         }
         dest.push_back(row);
     }
@@ -38,7 +38,7 @@ template<typename T>
 void print_1d_vector(const vector<T>& vec) {
     cout << "[";
     for (const auto& element : vec) {
-        cout << element << " ";
+        cout << static_cast<int>(element) << " ";
     }
     cout << "]" << endl;
 }
@@ -48,7 +48,7 @@ void print_matrix(const vector<vector<T>>& matrix) {
     for (const auto& row : matrix) {
         cout << "[";
         for (const auto& element : row) {
-            cout << element << " ";
+            cout << static_cast<int>(element) << " ";
         }
         cout << "]";
         cout << "\n" << endl;
@@ -56,54 +56,71 @@ void print_matrix(const vector<vector<T>>& matrix) {
 }
 
 Mat convert_to_edges(Mat& src) {
-    int ddepth = CV_16S;
+    int ddepth = CV_32F;
     Mat output, gray, grad_x, grad_y, energy_image;
 
-    GaussianBlur(src, gray, Size(3, 3), 0);
-    cvtColor(gray, output, COLOR_BGR2GRAY);
+    cvtColor(src, gray, COLOR_BGR2GRAY);
+
+    GaussianBlur(gray, output, Size(3, 3), 0);
 
     Sobel(output, grad_x, ddepth, 1, 0, 3);  // Sobel for X direction
     Sobel(output, grad_y, ddepth, 0, 1, 3);  // Sobel for Y direction
 
     // Scale
-    convertScaleAbs(grad_x, grad_x);
-    convertScaleAbs(grad_y, grad_y);
+    // convertScaleAbs(grad_x, grad_x);
+    // convertScaleAbs(grad_y, grad_y);
+
+    // vector<vector<int>> grad;
+    // gray_mat_to_vector(grad_x, grad);
+    // print_matrix(grad);
+
+    Mat mag;
+    magnitude(grad_x, grad_y, mag);
+
+    normalize(mag, output, 0, 255, cv::NORM_MINMAX, CV_8U);
 
     // Combine X and Y gradients
-    addWeighted(grad_x, 0.5, grad_y, 0.5, 0, output);
+    // addWeighted(grad_x, 0.5, grad_y, 0.5, 0, output);
+    // cout << "output depth" << output.depth() << endl;
+    // output.convertTo(output, CV_16F, 1.0/255.0);
+    // GaussianBlur(output, output, Size(5, 5), 0);
+    
 
-    output.convertTo(energy_image, CV_64F, 1.0/255.0);
     return output;
 }
 
 vector<int> compute_optimal_seam(Mat energy_image) {
-    vector<vector<int>> energy_matrix;
+    vector<vector<uint8_t>> energy_matrix;
 
     int rows = energy_image.rows;
     int cols = energy_image.cols;
 
     gray_mat_to_vector(energy_image, energy_matrix);
 
+    // print_matrix(energy_matrix);
+
     vector<vector<int>> optimal_seams(rows, vector<int>(cols, 0));
-    vector<vector<int>> reconstruct(rows, vector<int>(cols, 0));
+    vector<vector<signed char>> reconstruct(rows, vector<signed char>(cols, 0));
 
     // Set energies of side edges to "infinity" so that seams avoid it
     // int last_col_index = energy_matrix[0].size() - 1;
     for(int i = 0; i < rows; i++) {
-        energy_matrix[i][0] = numeric_limits<int>::max();
-        energy_matrix[i][cols-1] = numeric_limits<int>::max();
+        energy_matrix[i][0] = numeric_limits<uint8_t>::max();
+        energy_matrix[i][cols-1] = numeric_limits<uint8_t>::max();
     }
 
     // Set top row optimal seams to same values as energy matrix, 
     // Initialize top row of seam reconstruction matrix to 0
+    // print_1d_vector(energy_matrix[100]);
     for(int i = 0; i < cols; i++) {
         optimal_seams[0][i] = energy_matrix[0][i];
         reconstruct[0][i] = 0;
     }
 
+    // cout << "energy matrix: " << endl;
     // Compute optimal seams from top to bottom
     for(int i = 1; i < rows; i++) {
-        for(int j = 0; j < cols; j++) {
+        for(int j = 1; j < cols-1; j++) {
             optimal_seams[i][j] = optimal_seams[i-1][j];
             reconstruct[i][j] = 0;
             if (optimal_seams[i-1][j-1] < optimal_seams[i][j]) {
@@ -117,13 +134,53 @@ vector<int> compute_optimal_seam(Mat energy_image) {
         }
     }
 
+    // Define gradient color mapping
+    int minValue = 0;
+    int maxValue = 4000;
+    cv::Vec3b minColor(255, 0, 0);  // Blue color
+    cv::Vec3b maxColor(0, 0, 255); // Red color
+
+    // Create an image with the same size as the vector of vectors
+    // int rows = static_cast<int>(optimal_seams.size());
+    // int cols = static_cast<int>(optimal_seams[0].size());
+    cv::Mat image(rows, cols, CV_8UC3);
+
+    // Iterate through the elements of the vector of vectors
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            int value = optimal_seams[i][j];
+
+            // Interpolate color between minColor and maxColor based on value
+            double alpha = static_cast<double>(value - minValue) / (maxValue - minValue);
+            Vec3b color = minColor * (1 - alpha) + maxColor * alpha;
+
+            image.at<Vec3b>(i, j) = color;
+        }
+    }
+
+    // Display the resulting image
+    imshow("Image", image);
+
+    // print_matrix(optimal_seams);
+    // print_1d_vector(optimal_seams[rows-1]);
+
     // Find "bottom root" of optimal seam
-    int optimal_col = 1;
-    for(int i = 1; i < cols; i++) {
+    int optimal_col = 2;
+    for(int i = optimal_col; i < cols-2; i++) {
         if (optimal_seams[rows-1][i] < optimal_seams[rows-1][optimal_col]) {
             optimal_col = i;
         }
     }
+
+    cout << optimal_col << endl;
+    // print_matrix(reconstruct);
+
+    // vector<int> left_edge;
+    // for(int i = 0; i < rows; i ++) {
+    //     left_edge.push_back(reconstruct[i][0]);
+    // }
+
+    // print_1d_vector(left_edge);
 
     // Reconstruct optimal seam from bottom to top
     // Store seam as vector containing col index for each row 
@@ -186,10 +243,20 @@ void on_trackbar(int value, int& track_var, void* user_data) {
 
 Mat resize(Mat image, int shrink) {
     Mat copy = image.clone();
-    for(int i = 0; i < 100; i++) {
+    for(int i = 0; i < shrink; i++) {
         Mat edges = convert_to_edges(copy);
+        
         vector<int> seam_vec = compute_optimal_seam(edges);
-        print_1d_vector(seam_vec);
+        // print_1d_vector(seam_vec);
+        string e = "energy" + to_string(i);
+        if(i % 10 == 0) {
+            // Mat highlight = copy.clone();
+            // highlight = highlight_seam(highlight, seam_vec);
+            // imshow(e, highlight);
+            // imshow(e+"edge", edges);
+            // print_1d_vector(seam_vec);
+        }
+        // print_1d_vector(seam_vec);
         copy = remove_seam(copy, seam_vec);
     }
     return copy;
@@ -199,20 +266,32 @@ Mat resize(Mat image, int shrink) {
 int main(int argc, char** argv) {
     string image_path = "images/bikes.jpg";
     Mat img = imread(image_path);
-    // resize(img, img, Size(), 0.05, 0.05);
+    cout << "depth: " << img.depth() << endl;
+
+    // img.convertTo(img, CV_16U);
+    // cout << "depth: " << img.depth() << endl;
+    // resize(img, img, Size(), 0.1, 0.1);
+    // imshow("resized", img);
     // namedWindow("Seam Carving");
     // int trackbar_value = 0;
     // createTrackbar("Seams removed", "Seam Carving", &trackbar_value, img.cols, on_trackbar);
 
-    // Mat edges = convert_to_edges(img);
+    Mat edges = convert_to_edges(img);
+    // vector<vector<uint8_t>> edge_mat;
+    // gray_mat_to_vector(edges, edge_mat);
+    // print_matrix(edge_mat);
 
-    // vector<int> seam_vec = compute_optimal_seam(edges);
+    imshow("edge", edges);
+
+    vector<int> seam_vec = compute_optimal_seam(edges);
+
+    // print_1d_vector(seam_vec);
 
     // Mat edit = remove_seam(img, seam_vec);
-
-    Mat shrunk = resize(img, 100);
-
-    imshow("original", img);
+    // Mat edit = highlight_seam(img, seam_vec);
+    Mat shrunk = resize(img, 200);
+    // imshow("seam", edit);
+    // // imshow("original", img);
     imshow("converted", shrunk);
 
     waitKey(0);
