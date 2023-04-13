@@ -1,299 +1,172 @@
 #include <opencv4/opencv2/opencv.hpp>
-#include <opencv4/opencv2/imgcodecs.hpp>
 #include <opencv4/opencv2/core.hpp>
 #include <opencv4/opencv2/highgui.hpp>
 #include <opencv4/opencv2/imgproc.hpp>
 #include <iostream>
-#include <limits>
+#include <string>
+#include <algorithm>
 #include <vector>
 
 using namespace std;
 using namespace cv;
 
-void gray_mat_to_vector(Mat mat, vector<vector<uint8_t>> &dest) {
-    if(mat.channels() != 1) {
-        throw runtime_error("Error: image provided is not grayscale");
-    }
+Mat create_energy_image(Mat &image, bool show_energy_image) {
+    Mat blur, gray, grad_x, grad_y, abs_grad_x, abs_grad_y, grad, energy_image;
+    int ddepth = CV_16S;
 
-    for (int i = 0; i < mat.rows; ++i) {
-        vector<uint8_t> row;
-        for (int j = 0; j < mat.cols; ++j) {
-            row.push_back(mat.at<uint8_t>(i, j));
-        }
-        dest.push_back(row);
-    }
-}
-
-Mat gray_vector_to_mat(vector<vector<int>> vec) {
-    Mat newmat(vec.size(), vec[0].size(), CV_8U);
-    for (int i = 0; i < newmat.rows; i++) {
-        for (int j = 0; j < newmat.cols; j++) {
-            newmat.at<int>(i, j) = vec[i][j];
-        }
-    }
-    return newmat;
-}
-
-template<typename T>
-void print_1d_vector(const vector<T>& vec) {
-    cout << "[";
-    for (const auto& element : vec) {
-        cout << static_cast<int>(element) << " ";
-    }
-    cout << "]" << endl;
-}
-
-template<typename T>
-void print_matrix(const vector<vector<T>>& matrix) {
-    for (const auto& row : matrix) {
-        cout << "[";
-        for (const auto& element : row) {
-            cout << static_cast<int>(element) << " ";
-        }
-        cout << "]";
-        cout << "\n" << endl;
-    }
-}
-
-Mat convert_to_edges(Mat& src) {
-    int ddepth = CV_32F;
-    Mat output, gray, grad_x, grad_y, energy_image;
-
-    cvtColor(src, gray, COLOR_BGR2GRAY);
-
-    GaussianBlur(gray, output, Size(3, 3), 0);
-
-    Sobel(output, grad_x, ddepth, 1, 0, 3);  // Sobel for X direction
-    Sobel(output, grad_y, ddepth, 0, 1, 3);  // Sobel for Y direction
-
-    // Scale
-    // convertScaleAbs(grad_x, grad_x);
-    // convertScaleAbs(grad_y, grad_y);
-
-    // vector<vector<int>> grad;
-    // gray_mat_to_vector(grad_x, grad);
-    // print_matrix(grad);
-
-    Mat mag;
-    magnitude(grad_x, grad_y, mag);
-
-    normalize(mag, output, 0, 255, cv::NORM_MINMAX, CV_8U);
-
-    // Combine X and Y gradients
-    // addWeighted(grad_x, 0.5, grad_y, 0.5, 0, output);
-    // cout << "output depth" << output.depth() << endl;
-    // output.convertTo(output, CV_16F, 1.0/255.0);
-    // GaussianBlur(output, output, Size(5, 5), 0);
+    GaussianBlur(image, blur, Size(3,3), 0, 0, BORDER_DEFAULT);
+    cvtColor(blur, gray, COLOR_BGR2GRAY);
     
+    // use Scharr operator to calculate the gradient of the image in the x and y direction
+    Scharr(gray, grad_x, ddepth, 1, 0);//, scale, delta, BORDER_DEFAULT);
+    Scharr(gray, grad_y, ddepth, 0, 1);//, scale, delta, BORDER_DEFAULT);
 
-    return output;
+    // convert gradients to absolute versions of themselves
+    convertScaleAbs(grad_x, abs_grad_x);
+    convertScaleAbs(grad_y, abs_grad_y);
+    
+    addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad);
+    
+    // convert the default values to double precision
+    grad.convertTo(energy_image, CV_64F, 1.0/255.0);
+    
+    // create and show the newly created energy image
+    if (show_energy_image) {
+        namedWindow("Energy Image", WINDOW_AUTOSIZE); imshow("Energy Image", energy_image);
+    }
+    
+    return energy_image;
 }
 
-vector<int> compute_optimal_seam(Mat energy_image) {
-    vector<vector<uint8_t>> energy_matrix;
-
+Mat create_total_energy_map(Mat &energy_image, bool show_colored_map) {
+    double a,b,c;
     int rows = energy_image.rows;
     int cols = energy_image.cols;
+    
+    // initialize the map with zeros
+    Mat total_energy_image = Mat(rows, cols, CV_64F, double(0));
+    
+    // copy the first row
+    energy_image.row(0).copyTo(total_energy_image.row(0));
+    
+    // take the minimum of the three neighbors and add to total, this creates a running sum which is used to determine the lowest energy path
+    for (int m = 1; m < rows; m++) {
+        for (int n = 0; n < cols; n++) {
+            a = total_energy_image.at<double>(m - 1, max(n - 1, 0));
+            b = total_energy_image.at<double>(m - 1, n);
+            c = total_energy_image.at<double>(m - 1, min(n + 1, cols - 1));
 
-    gray_mat_to_vector(energy_image, energy_matrix);
-
-    // print_matrix(energy_matrix);
-
-    vector<vector<int>> optimal_seams(rows, vector<int>(cols, 0));
-    vector<vector<signed char>> reconstruct(rows, vector<signed char>(cols, 0));
-
-    // Set energies of side edges to "infinity" so that seams avoid it
-    // int last_col_index = energy_matrix[0].size() - 1;
-    for(int i = 0; i < rows; i++) {
-        energy_matrix[i][0] = numeric_limits<uint8_t>::max();
-        energy_matrix[i][cols-1] = numeric_limits<uint8_t>::max();
-    }
-
-    // Set top row optimal seams to same values as energy matrix, 
-    // Initialize top row of seam reconstruction matrix to 0
-    // print_1d_vector(energy_matrix[100]);
-    for(int i = 0; i < cols; i++) {
-        optimal_seams[0][i] = energy_matrix[0][i];
-        reconstruct[0][i] = 0;
-    }
-
-    // cout << "energy matrix: " << endl;
-    // Compute optimal seams from top to bottom
-    for(int i = 1; i < rows; i++) {
-        for(int j = 1; j < cols-1; j++) {
-            optimal_seams[i][j] = optimal_seams[i-1][j];
-            reconstruct[i][j] = 0;
-            if (optimal_seams[i-1][j-1] < optimal_seams[i][j]) {
-                optimal_seams[i][j] = optimal_seams[i-1][j-1];
-                reconstruct[i][j] = -1;
-            } else if (optimal_seams[i-1][j+1] < optimal_seams[i][j]) {
-                optimal_seams[i][j] = optimal_seams[i-1][j+1];
-                reconstruct[i][j] = 1;
-            }
-            optimal_seams[i][j] += energy_matrix[i][j];
+            total_energy_image.at<double>(m, n) = energy_image.at<double>(m, n) + min(a, min(b, c));
         }
     }
 
-    // Define gradient color mapping
-    int minValue = 0;
-    int maxValue = 4000;
-    cv::Vec3b minColor(255, 0, 0);  // Blue color
-    cv::Vec3b maxColor(0, 0, 255); // Red color
-
-    // Create an image with the same size as the vector of vectors
-    // int rows = static_cast<int>(optimal_seams.size());
-    // int cols = static_cast<int>(optimal_seams[0].size());
-    cv::Mat image(rows, cols, CV_8UC3);
-
-    // Iterate through the elements of the vector of vectors
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            int value = optimal_seams[i][j];
-
-            // Interpolate color between minColor and maxColor based on value
-            double alpha = static_cast<double>(value - minValue) / (maxValue - minValue);
-            Vec3b color = minColor * (1 - alpha) + maxColor * alpha;
-
-            image.at<Vec3b>(i, j) = color;
-        }
+    // create and show colored energy map
+    if (show_colored_map) {
+        Mat color_energy_map;
+        double Cmin;
+        double Cmax;
+        minMaxLoc(total_energy_image, &Cmin, &Cmax);
+        float scale = 255.0 / (Cmax - Cmin);
+        // scale all values in energy map to 8-bit range and copy to color_energy_map
+        total_energy_image.convertTo(color_energy_map, CV_8UC1, scale);
+        // apply color map to color_energy_map to visualise total energy for all pixels
+        applyColorMap(color_energy_map, color_energy_map, COLORMAP_TURBO);
+        namedWindow("Cumulative Energy Map", WINDOW_AUTOSIZE); imshow("Cumulative Energy Map", color_energy_map);
     }
-
-    // Display the resulting image
-    imshow("Image", image);
-
-    // print_matrix(optimal_seams);
-    // print_1d_vector(optimal_seams[rows-1]);
-
-    // Find "bottom root" of optimal seam
-    int optimal_col = 2;
-    for(int i = optimal_col; i < cols-2; i++) {
-        if (optimal_seams[rows-1][i] < optimal_seams[rows-1][optimal_col]) {
-            optimal_col = i;
-        }
-    }
-
-    cout << optimal_col << endl;
-    // print_matrix(reconstruct);
-
-    // vector<int> left_edge;
-    // for(int i = 0; i < rows; i ++) {
-    //     left_edge.push_back(reconstruct[i][0]);
-    // }
-
-    // print_1d_vector(left_edge);
-
-    // Reconstruct optimal seam from bottom to top
-    // Store seam as vector containing col index for each row 
-    vector<int> seam_indices(rows,0);
-    seam_indices[rows-1] = optimal_col;
-
-    for(int i = rows-1; i > 0; i--) {
-        optimal_col += reconstruct[i][optimal_col];
-        seam_indices[i-1] = optimal_col;
-    }
-
-    return seam_indices;
+    
+    return total_energy_image;
 }
 
-Mat remove_seam(Mat image, vector<int> seam) {
-    // Check if the size of the seam vector matches the number of rows in the image
-    if (seam.size() != image.rows) {
+vector<int> find_optimal_seam(Mat& energy_map) {
+    vector<int> seam;
+    double a,b,c;
+    double min_val, max_val;
+    Point min_pt, max_pt;
+
+    int rows = energy_map.rows;
+    int cols = energy_map.cols;
+
+    Mat last_row = energy_map.row(rows - 1);
+
+    // Get optimal column (bottom row pixel with lowest energy) for reconstruction
+    minMaxLoc(last_row, &min_val, &max_val, &min_pt, &max_pt);
+    int optimal_col = min_pt.x;
+
+    // init seam vector
+    seam.resize(rows);
+    seam[rows-1] = optimal_col;
+
+    // reconstruct optimal seam based on energy map
+    // works from bottom to top, taking the pixel above (either up left, up center, or up right) with minimum energy and adding it to seam
+    for (int i = rows - 2; i >= 0; i--) {
+        a = energy_map.at<double>(i, max(optimal_col - 1, 0));
+        b = energy_map.at<double>(i, optimal_col);
+        c = energy_map.at<double>(i, min(optimal_col + 1, cols - 1));
+        
+        double minimum = min(min(a,b), c);
+        int direction = (minimum == a) ? -1 : ((minimum == b) ? 0 : 1);
+        
+        optimal_col += direction;
+        optimal_col = min(max(optimal_col, 0), cols - 1); // Handle edge(literally) cases
+        seam[i] = optimal_col;
+    }
+    return seam;
+}
+
+void highlight_seam(Mat &energy, vector<int> seam) {
+    for (int i = 0; i < energy.rows; i++) {
+        energy.at<double>(i,seam[i]) = 1;
+    }
+    namedWindow("Seam on Energy Image", WINDOW_AUTOSIZE); imshow("Seam on Energy Image", energy);
+}
+
+Mat remove_seam(Mat& image, vector<int> seam) {
+    int rows = image.rows;
+    int cols = image.cols;
+
+    if (seam.size() != rows) {
         throw runtime_error("Seam vector size does not match the number of rows in the image.");
     }
 
     // Check if the column indices in the seam vector are valid
     for (int i = 0; i < seam.size(); i++) {
-        if (seam[i] < 0 || seam[i] > image.cols - 1) {
+        if (seam[i] < 0 || seam[i] > cols - 1) {
             throw runtime_error("Invalid column index in seam vector.");
         }
     }
 
-    Mat edited_image(image.rows, image.cols-1, CV_8UC3);
-    for (int i = 0; i < image.rows; i++) {
+    Mat edited_image(rows, cols-1, CV_8UC3);
+    for (int i = 0; i < rows; i++) {
         int edited_col_index = 0;
-        for (int j = 0; j < image.cols; j++) {
+        for (int j = 0; j < cols; j++) {
             if(j != seam[i]) {
                 edited_image.at<Vec3b>(i,edited_col_index) = image.at<Vec3b>(i,j);
                 edited_col_index++;
             }
         }
     }
-    return edited_image;
+    image = edited_image;
+    return image;
 }
 
-
-Mat highlight_seam(Mat image, vector<int> seam) {
-    Mat edited_image(image.rows, image.cols, CV_8UC3);
-    Vec3b red_pixel(0, 0, 255);
-    for (int i = 0; i < image.rows; i++) {
-        for (int j = 0; j < image.cols; j++) {
-            if(j != seam[i]) {
-                edited_image.at<Vec3b>(i,j) = image.at<Vec3b>(i,j);
-            } else {
-                edited_image.at<Vec3b>(i,j) = red_pixel;
-            }
-        }
-    }
-    return edited_image;
-}
-
-void on_trackbar(int value, int& track_var, void* user_data) {
-    track_var = value;
-}
-
-Mat resize(Mat image, int shrink) {
+Mat resize_image(Mat image, int shrink) {
     Mat copy = image.clone();
-    for(int i = 0; i < shrink; i++) {
-        Mat edges = convert_to_edges(copy);
-        
-        vector<int> seam_vec = compute_optimal_seam(edges);
-        // print_1d_vector(seam_vec);
-        string e = "energy" + to_string(i);
-        if(i % 10 == 0) {
-            // Mat highlight = copy.clone();
-            // highlight = highlight_seam(highlight, seam_vec);
-            // imshow(e, highlight);
-            // imshow(e+"edge", edges);
-            // print_1d_vector(seam_vec);
-        }
-        // print_1d_vector(seam_vec);
-        copy = remove_seam(copy, seam_vec);
+    for (int i = 0; i < shrink; i++) {
+        Mat energy = create_energy_image(copy, false);
+        Mat map = create_total_energy_map(energy, true);
+        vector<int> seam = find_optimal_seam(map);
+        remove_seam(copy, seam);
     }
     return copy;
 }
 
-
-int main(int argc, char** argv) {
-    string image_path = "images/bikes.jpg";
+int main() {
+    string image_path = "images/valve.png";
     Mat img = imread(image_path);
-    cout << "depth: " << img.depth() << endl;
+    imshow("original", img);
+    img = resize_image(img, 100);
 
-    // img.convertTo(img, CV_16U);
-    // cout << "depth: " << img.depth() << endl;
-    // resize(img, img, Size(), 0.1, 0.1);
-    // imshow("resized", img);
-    // namedWindow("Seam Carving");
-    // int trackbar_value = 0;
-    // createTrackbar("Seams removed", "Seam Carving", &trackbar_value, img.cols, on_trackbar);
-
-    Mat edges = convert_to_edges(img);
-    // vector<vector<uint8_t>> edge_mat;
-    // gray_mat_to_vector(edges, edge_mat);
-    // print_matrix(edge_mat);
-
-    imshow("edge", edges);
-
-    vector<int> seam_vec = compute_optimal_seam(edges);
-
-    // print_1d_vector(seam_vec);
-
-    // Mat edit = remove_seam(img, seam_vec);
-    // Mat edit = highlight_seam(img, seam_vec);
-    Mat shrunk = resize(img, 200);
-    // imshow("seam", edit);
-    // // imshow("original", img);
-    imshow("converted", shrunk);
+    imshow("resized", img);
 
     waitKey(0);
 }
-
