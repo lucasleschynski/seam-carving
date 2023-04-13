@@ -32,4 +32,5 @@ Once we have an optimal seam, we simply remove it. If we want to remove more tha
 
 For example, if we choose to remove 350 pixels from the width of the original image above, we get:
 
-![Color](https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/resized.png?raw=true)
+<!-- ![Color](https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/resized.png?raw=true) -->
+<img src="https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/resized.png?raw=true" width="900" />
