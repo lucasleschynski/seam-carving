@@ -20,8 +20,8 @@ Mat create_energy_image(Mat image, bool show_energy_image) {
     cvtColor(blur, gray, COLOR_BGR2GRAY);
     
     // use Scharr operator to calculate the gradient of the image in the x and y direction
-    Scharr(gray, grad_x, ddepth, 1, 0);//, scale, delta, BORDER_DEFAULT);
-    Scharr(gray, grad_y, ddepth, 0, 1);//, scale, delta, BORDER_DEFAULT);
+    Scharr(gray, grad_x, ddepth, 1, 0);
+    Scharr(gray, grad_y, ddepth, 0, 1);
 
     // convert gradients to absolute versions of themselves
     convertScaleAbs(grad_x, abs_grad_x);
@@ -113,6 +113,8 @@ vector<int> find_optimal_seam(Mat& energy_map, SeamDirection seam_direction) {
         seam.resize(rows);
         seam[rows-1] = optimal_col;
 
+        // Reconstruct optimal seam from energy map
+        // heuristic: construct seam upwards via minimum energy top neighbour
         for (int i = rows - 1; i >= 0; i--) {
             a = energy_map.at<double>(i, max(optimal_col - 1, 0));
             b = energy_map.at<double>(i, optimal_col);
@@ -239,13 +241,45 @@ Mat resize_image(Mat image, int shrink, SeamDirection seam_direction) {
     return copy;
 }
 
-int main() {
-    string image_path = "images/castle.jpg";
-    Mat img = imread(image_path);
-    // resize(img, img, Size(), 0.4, 0.4);
+void get_user_parameters(string &filename, SeamDirection& seam_direction, int &resize_amt) {
+    /*
+    Warning: Does not check for valid inputs
+    */
 
+    // Select image
+    cout << "Enter image filepath: " << endl;
+    cin >> filename;
+
+    // Selecting seam direction
+    cout << "Which dimension to resize? (w for width, h for height)" << endl;
+    string direction_input;
+    cin >> direction_input;
+
+    if(direction_input == "w") {
+        seam_direction = VERTICAL;
+    } else if (direction_input == "h") {
+        seam_direction = HORIZONTAL;
+    }
+
+    // Selecting resize amount
+    cout << "How many pixels to shrink by?" << endl;
+    int shrink_input;
+    cin >> resize_amt;
+}
+
+int main() {
+    string image_path;
+    SeamDirection shrink_direction;
+    int shrink_size;
+
+    get_user_parameters(image_path, shrink_direction, shrink_size);
+
+    // string image_path = "images/castle.jpg";
+    Mat img = imread(image_path);
+    resize(img, img, Size(), 0.5, 0.5);
     imshow("original", img);
-    img = resize_image(img, 100, VERTICAL);
+    //img = resize_image(img, 200, VERTICAL);
+    img = resize_image(img, shrink_size, shrink_direction);
 
     imshow("resized", img);
 
