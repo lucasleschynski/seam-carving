@@ -11,7 +11,8 @@ To get the energy image, I used the Scharr operator to generate a gradient magni
 
 And here is the original converted into an energy image:
 
-![Energy Image](/images/readme/energy.png)
+!(/images/readme/energy.png)
+![Energy](https://github.com/lucasleschynski/seam-carving/blob/[branch]/image.jpg?raw=true)
 
 ### Finding Optimal Seams
 
