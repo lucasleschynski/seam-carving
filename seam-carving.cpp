@@ -224,8 +224,8 @@ Mat remove_seam(Mat image, vector<int> seam, SeamDirection seam_direction) {
 Mat resize_image(Mat image, int shrink, SeamDirection seam_direction) {
     Mat copy = image.clone();
     for (int i = 0; i < shrink; i++) {
-        Mat energy = create_energy_image(copy, false);
-        Mat map = create_total_energy_map(energy, seam_direction, true);
+        Mat energy = create_energy_image(copy, true);
+        Mat map = create_total_energy_map(energy, seam_direction, false);
         vector<int> seam = find_optimal_seam(map, seam_direction);
         copy = remove_seam(copy, seam, seam_direction);
     }
@@ -269,6 +269,12 @@ int main() {
     Mat img = imread(image_path);
     // resize(img, img, Size(), 0.5, 0.5);
     imshow("original", img);
+
+    Mat energy = create_energy_image(img, false);
+    imshow("origenergy", energy);
+    Mat color = create_total_energy_map(energy, shrink_direction, true);
+    imshow("origcolor", color);
+
     // img = resize_image(img, 300, HORIZONTAL);
     img = resize_image(img, shrink_size, shrink_direction);
 
