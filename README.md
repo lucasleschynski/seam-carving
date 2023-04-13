@@ -7,12 +7,11 @@ Seam carving works by finding low energy seams (single pixel paths from top-bott
 ### Getting Energy Image
 
 To get the energy image, I used the Scharr operator to generate a gradient magnitude drawing of the original image. Here is the original:
-![Energy Image](/images/readme/original.png)
+![Original](https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/original.png?raw=true)
 
 And here is the original converted into an energy image:
 
-!(/images/readme/energy.png)
-![Energy](https://github.com/lucasleschynski/seam-carving/blob/[branch]/image.jpg?raw=true)
+![Energy](https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/energy.png?raw=true)
 
 ### Finding Optimal Seams
 
@@ -21,7 +20,7 @@ After getting the energy image, the optimal seams are computed. In order to do t
 To do this efficiently, the image is scanned from top to bottom, generating the total energy for each seam. Dynamic programming is used here to make the computation of the seams efficient.
 
 After finding the total energy for each seam, we have something like this:
-![Energy Image](/images/readme/color.png)
+![Color](https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/color.png?raw=true)
 
 This shows the energy of each seam from top to bottom at each pixel in its path (red = high energy, blue = low energy).
 
@@ -33,4 +32,4 @@ Once we have an optimal seam, we simply remove it. If we want to remove more tha
 
 For example, if we choose to remove 350 pixels from the width of the original image above, we get:
 
-![Energy Image](/images/readme/resized.png)
+![Color](https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/resized.png?raw=true)
