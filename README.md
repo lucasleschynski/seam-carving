@@ -8,8 +8,9 @@ Seam carving works by finding low energy seams (single pixel paths from top-bott
 
 To get the energy image, I used the Scharr operator to generate a gradient magnitude drawing of the original image. Here is the original:
 
-<!-- ![Original](https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/original.png?raw=true) -->
-<img src="https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/original.png?raw=true" height="280" />
+![Original](https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/original.png?raw=true)
+
+<!-- <img src="https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/original.png?raw=true" height="280" /> -->
 
 And here is the original converted into an energy image:
 
@@ -34,5 +35,6 @@ Once we have an optimal seam, we simply remove it. If we want to remove more tha
 
 For example, if we choose to remove 350 pixels from the width of the original image above, we get:
 
-<!-- ![Color](https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/resized.png?raw=true) -->
-<img src="https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/resized.png?raw=true" height="275" />
+![Color](https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/resized.png?raw=true)
+
+<!-- <img src="https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/resized.png?raw=true" height="275" /> -->
