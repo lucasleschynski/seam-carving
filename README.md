@@ -37,4 +37,6 @@ For example, if we choose to remove 350 pixels from the width of the original im
 
 ![Color](https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/resized.png?raw=true)
 
+You can see that the image still looks perfectly normal and unaltered even though its dimensions have been significantly reduced.
+
 <!-- <img src="https://github.com/lucasleschynski/seam-carving/blob/main/images/readme/resized.png?raw=true" height="275" /> -->
